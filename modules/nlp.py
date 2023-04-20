@@ -18,6 +18,7 @@ class BertWrapperForNER():
         
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model     = AutoModelForTokenClassification.from_pretrained(model_name)
+        self.model.eval()
          
         self.pipeline = pipeline("ner", model=self.model, tokenizer=self.tokenizer)
     
@@ -63,17 +64,16 @@ class BertWrapperForNER():
     @staticmethod
     def load_from(path):
         return BertWrapperForNER(model_name=path)
-    
 
 #################################################################
 # Sentiment Analysis Task
 #################################################################
 
+"""
 class BERTWrapperForSA():
     def __init__(self, model_name=None):
-        if model_name is not None:
-            self.tokenizer = BertTokenizer.from_pretrained(model_name)
-            self.model = BertForSequenceClassification.from_pretrained(model_name)
+        self.tokenizer = BertTokenizer.from_pretrained(model_name)
+        self.model = BertForSequenceClassification.from_pretrained(model_name)
         
     def __call__(self, tweets: List):
         return self.pipeline(tweets)
@@ -85,7 +85,10 @@ class BERTWrapperForSA():
     def save_to_local(self, path):
         self.tokenizer.save_pretrained(path)
         self.model.save_pretrained(path)
+"""
+
 
 class VaderSentimentWrapper():
     pass
+
 
