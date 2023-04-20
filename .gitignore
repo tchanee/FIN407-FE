@@ -1,0 +1,7 @@
+# files
+*.jpeg
+*.png
+*.jpg
+
+# cache folders
+/src/__pycache__
