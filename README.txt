@@ -17,7 +17,7 @@ Approach 1:
 
 Approach 2:
 - clustering the tweets by industies/companies: Davlan/distilbert-base-multilingual-cased-ner-hrl
-- sentiment analysis: FinBert
+- sentiment analysis: ProsusAI/finbert + finiteautomata/bertweet-base-sentiment-analysis
 
 ## Report Outline
 

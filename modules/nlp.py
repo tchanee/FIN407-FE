@@ -1,31 +1,34 @@
-from transformers import BertTokenizer, BertForSequenceClassification, AutoTokenizer, AutoModelForTokenClassification
+from transformers import AutoTokenizer, AutoModelForTokenClassification, AutoModelForSequenceClassification
 from transformers import pipeline
+ 
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-from typing import List
+import torch
+import numpy as np
 
 #################################################################
-# Named Entity Recognition Task
+# Named Entity Recognition Models
 #################################################################
 
-class BertWrapperForNER():
-    DEFAULT_MODEL = "Davlan/distilbert-base-multilingual-cased-ner-hrl"
+class BERTWrapperForNER():
+    DEFAULT_ID = "Davlan/distilbert-base-multilingual-cased-ner-hrl"
     
-    def __init__(self, model_name=DEFAULT_MODEL):
-        self.model_name = model_name.split("/")[-1]
+    def __init__(self, model_id_or_path: str = DEFAULT_ID):
+        self.model_name = model_id_or_path.split("/")[-1]
         
         self.org_start_label = "B-ORG"
         self.org_middle_label = "I-ORG"
         
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model     = AutoModelForTokenClassification.from_pretrained(model_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_id_or_path)
+        self.model     = AutoModelForTokenClassification.from_pretrained(model_id_or_path)
         self.model.eval()
          
         self.pipeline = pipeline("ner", model=self.model, tokenizer=self.tokenizer)
     
-    def eval(self, texts: List):
+    def pipe(self, texts):
         return self.pipeline(texts)
         
-    def recognize(self, texts: List):
+    def __call__(self, texts):
         outputs = self.eval(texts)
         
         all_entities = []
@@ -56,39 +59,116 @@ class BertWrapperForNER():
             all_entities.append(entities)
 
         return all_entities
+    
+    def to(self, device):
+        self.model = self.model.to(device)
+        self.pipeline = self.pipeline("ner", model=self.model, tokenizer=self.tokenizer, device=device)
             
+    def save_to(self, path):
+        self.tokenizer.save_pretrained(path)
+        self.model.save_pretrained(path)
+                
+    @staticmethod
+    def load_from(path):
+        return BERTWrapperForNER(path)
+
+#################################################################
+# Sentiment Analysis Models
+#################################################################
+
+class BERTWrapperForSA():
+    FIN_BERT_ID = "ProsusAI/finbert"
+    TWEET_BERT_ID = "finiteautomata/bertweet-base-sentiment-analysis"
+    DISTILBERT_ID = "textattack/distilbert-base-cased-SST-2"
+    
+    def __init__(self, model_id_or_path: str):
+        self.model_name = model_id_or_path.split("/")[-1]
+        
+        self.tokenizer = AutoTokenizer.from_pretrained(model_id_or_path)
+        self.model = AutoModelForSequenceClassification.from_pretrained(model_id_or_path)
+        self.model.eval()
+    
+    def verbalize(self, pred_ids):
+        return [self.model.config.id2label[pred_id.item()] for pred_id in pred_ids.flatten()]
+        
+    def decode(self, probas, decoding, rebalancing_threshold=0.3):
+        if decoding == "argmax":
+            pred_ids = probas.argmax(dim=-1)
+            return pred_ids 
+        elif decoding == "rebalanced":
+            rebalancing_threshold = 0.3
+            pos_id = self.model.config.label2id["positive"]
+            neg_id = self.model.config.label2id["negative"]
+            neu_id = self.model.config.label2id["neutral"]
+            mask = (probas[:, pos_id] + probas[:, neg_id] >= rebalancing_threshold).flatten()
+            probas[mask, neu_id] = 0
+            pred_ids = probas.argmax(dim=-1)
+            return pred_ids
+        else:
+            raise ValueError(f"Decoding method '{decoding}' not supported")
+         
+    def eval(self, texts):
+        with torch.no_grad():
+            batch_encoding = self.tokenizer.batch_encode_plus(texts, return_tensors="pt", truncation=True, padding=True)
+            logits = self.model(**batch_encoding).logits
+            probas = torch.softmax(logits, dim=-1)
+            return probas
+    
+    def __call__(self, texts, decoding="argmax"):
+        with torch.no_grad():
+            probas = self.eval(texts)
+            pred_ids = self.decode(probas, decoding)
+            preds = self.verbalize(pred_ids)
+            return preds
+    
+    def to(self, device):
+        self.model = self.model.to(device)
+        
     def save_to(self, path):
         self.tokenizer.save_pretrained(path)
         self.model.save_pretrained(path)
         
     @staticmethod
     def load_from(path):
-        return BertWrapperForNER(model_name=path)
+        return BERTWrapperForSA(path)
 
-#################################################################
-# Sentiment Analysis Task
-#################################################################
-
-"""
-class BERTWrapperForSA():
-    def __init__(self, model_name=None):
-        self.tokenizer = BertTokenizer.from_pretrained(model_name)
-        self.model = BertForSequenceClassification.from_pretrained(model_name)
-        
-    def __call__(self, tweets: List):
-        return self.pipeline(tweets)
-    
-    def load_from_local(self, path):
-        self.tokenizer = BertTokenizer.from_pretrained(path)
-        self.model = BertForSequenceClassification.from_pretrained(path)
-            
-    def save_to_local(self, path):
-        self.tokenizer.save_pretrained(path)
-        self.model.save_pretrained(path)
-"""
-
-
+  
 class VaderSentimentWrapper():
-    pass
-
+    LABEL2ID = {"negative": 0, "neutral": 1, "positive": 2}
+    ID2LABEL = {v:k for k, v in LABEL2ID.items()}
+    
+    def __init__(self):
+        self.model = SentimentIntensityAnalyzer()
+        self.score_func = np.frompyfunc(self.model.polarity_scores, 1, 1)
+        
+    @staticmethod
+    def verbalize(pred_ids):
+        return [VaderSentimentWrapper.ID2LABEL[pred_id] for pred_id in pred_ids]
+       
+    @staticmethod 
+    def decode(scores, decoding="argmax", rebalancing_threshold=0.3):
+        scores = np.array([list(score.values())[:-1] for score in scores])
+        if decoding == "argmax":
+            pred_ids = np.argmax(scores, axis=1).tolist()
+            return pred_ids
+        elif decoding == "rebalanced":
+            pos_id = VaderSentimentWrapper.LABEL2ID["positive"]
+            neu_id = VaderSentimentWrapper.LABEL2ID["neutral"]
+            neg_id = VaderSentimentWrapper.LABEL2ID["negative"]
+            mask = (scores[:, pos_id] + scores[:, neg_id] >= rebalancing_threshold).flatten()
+            scores[mask, neu_id] = 0
+            pred_ids = np.argmax(scores, axis=1).flatten().tolist()
+            return pred_ids
+    
+    def eval(self, texts):
+        scores = self.score_func(np.array(texts)).tolist()
+        return scores
+            
+    def __call__(self, texts, decoding="argmax"):
+        scores = self.eval(texts)
+        pred_ids = VaderSentimentWrapper.decode(scores, decoding=decoding)
+        preds = VaderSentimentWrapper.verbalize(pred_ids)
+        return preds
+            
+            
 
