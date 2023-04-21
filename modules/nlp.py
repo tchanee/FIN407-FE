@@ -6,6 +6,7 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import torch
 import numpy as np
 
+
 #################################################################
 # Named Entity Recognition Models
 #################################################################
@@ -107,7 +108,7 @@ class BERTWrapperForSA():
         else:
             raise ValueError(f"Decoding method '{decoding}' not supported")
          
-    def eval(self, texts):
+    def predict(self, texts):
         with torch.no_grad():
             batch_encoding = self.tokenizer.batch_encode_plus(texts, return_tensors="pt", truncation=True, padding=True)
             logits = self.model(**batch_encoding).logits
@@ -160,7 +161,7 @@ class VaderSentimentWrapper():
             pred_ids = np.argmax(scores, axis=1).flatten().tolist()
             return pred_ids
     
-    def eval(self, texts):
+    def compute_scores(self, texts):
         scores = self.score_func(np.array(texts)).tolist()
         return scores
             

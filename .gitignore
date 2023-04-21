@@ -1,5 +1,15 @@
+# files
+*.pdf
+*.jpeg
+*.png
+*.jpg
+
 # data folders
 Data/
+data/
+
+# models
+models/*
 
 # cache folders
 /modules/__pycache__
