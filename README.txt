@@ -7,10 +7,6 @@ TODO
 ## Tasks
 
 week 9:
-Farouk:
-    - modify the SA model to output the probabilities
-    - rework distribution balancing to mitigate its shortfalls (case where pos approx equals neg and pos + neg > rebalacing_threshhold)
-    - approach?
 Abiola:
     - extract the tweets that elon musk replied to in a (separate) file, and augment the current processed dataframe with the original tweet's ID for each reply
     - approach?
