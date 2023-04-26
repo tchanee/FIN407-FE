@@ -1,3 +1,5 @@
+# author: FAROUK BOUKIL
+
 from transformers import AutoTokenizer, AutoModelForTokenClassification, AutoModelForSequenceClassification
 from transformers import pipeline
  
@@ -26,11 +28,11 @@ class BERTWrapperForNER():
          
         self.pipeline = pipeline("ner", model=self.model, tokenizer=self.tokenizer)
     
-    def extract(self, texts):
+    def apply(self, texts):
         return self.pipeline(texts)
         
     def __call__(self, texts):
-        outputs = self.extract(texts)
+        outputs = self.apply(texts)
         
         all_entities = []
         for output in outputs:
@@ -83,45 +85,54 @@ class BERTWrapperForSA():
     DISTILBERT_ID = "textattack/distilbert-base-cased-SST-2"
     
     def __init__(self, model_id_or_path: str, verbalizer=None):
+        # model
         self.model_name = model_id_or_path.split("/")[-1]
-        
         self.tokenizer = AutoTokenizer.from_pretrained(model_id_or_path)
         self.model = AutoModelForSequenceClassification.from_pretrained(model_id_or_path)
         self.model.eval()
-        
-        self.verbalizer = verbalizer
+        # decoding
+        self.amplification_threshold = 0.3
+        self.sentiment_dominance_ratio = 2
+        self.pos_id = self.model.config.label2id["positive"]
+        self.neg_id = self.model.config.label2id["negative"]
+        self.neu_id = self.model.config.label2id["neutral"]
+        # verbalization
+        self.verbalizer = (lambda pred_id: self.model.config.id2label[pred_id]) if verbalizer is None else verbalizer
     
     def verbalize(self, pred_ids):
-        if self.verbalizer is None:
-            # default verbalizer
-            return [self.model.config.id2label[pred_id.item()] for pred_id in pred_ids.flatten()]
-        # custom verbalizer
-        return [self.verbalizer(pred_id.item()) for pred_id in pred_ids.flatten()]
+        return [self.verbalizer(pred_id) for pred_id in pred_ids]
         
-    def decode(self, probas, decoding, rebalancing_threshold=0.3):
-        if decoding == "argmax":
-            pred_ids = probas.argmax(dim=-1)
+    def decode(self, probas, decoding="greedy"):
+        if decoding == "greedy":
+            pred_ids = probas.argmax(dim=-1).tolist()
             return pred_ids 
-        elif decoding == "rebalanced":
-            rebalancing_threshold = 0.3
-            pos_id = self.model.config.label2id["positive"]
-            neg_id = self.model.config.label2id["negative"]
-            neu_id = self.model.config.label2id["neutral"]
-            mask = (probas[:, pos_id] + probas[:, neg_id] >= rebalancing_threshold).flatten()
-            probas[mask, neu_id] = 0
-            pred_ids = probas.argmax(dim=-1)
+        elif decoding == "amplified":
+            probas_positive = probas[:, self.pos_id].flatten() 
+            probas_negative = probas[:, self.neg_id].flatten()
+            amplification_mask = probas_positive + probas_negative >= self.amplification_threshold
+            sentiment_dominance_mask = torch.logical_or(
+                probas_positive > self.sentiment_dominance_ratio * probas_negative,
+                probas_negative > self.sentiment_dominance_ratio * probas_positive
+            )
+            mask = torch.logical_and(amplification_mask, sentiment_dominance_mask)
+            probas[mask, self.neu_id] = -1
+            pred_ids = probas.argmax(dim=-1).tolist()
             return pred_ids
         else:
             raise ValueError(f"Decoding method '{decoding}' not supported")
          
-    def predict(self, texts):
+    def predict(self, texts, labeled=False):
         with torch.no_grad():
             batch_encoding = self.tokenizer.batch_encode_plus(texts, return_tensors="pt", truncation=True, padding=True)
             logits = self.model(**batch_encoding).logits
-            probas = torch.softmax(logits, dim=-1)
-            return probas
+        probas = torch.softmax(logits, dim=-1)
+        
+        if labeled:
+            probas = [{self.verbalizer(i):proba.item() for i, proba in enumerate(distribution)} for distribution in probas]
+        
+        return probas
     
-    def __call__(self, texts, decoding="argmax"):
+    def __call__(self, texts, decoding="greedy"):
         with torch.no_grad():
             probas = self.predict(texts)
             pred_ids = self.decode(probas, decoding)
@@ -138,42 +149,56 @@ class BERTWrapperForSA():
     @staticmethod
     def load_from(path):
         return BERTWrapperForSA(path)
-
   
-class VaderSentimentWrapper():
-    LABEL2ID = {"negative": 0, "neutral": 1, "positive": 2}
-    ID2LABEL = {v:k for k, v in LABEL2ID.items()}
-    
+class VaderSentimentWrapper():    
     def __init__(self, verbalizer=None):
+        # model
         self.model = SentimentIntensityAnalyzer()
         self.score_func = np.frompyfunc(self.model.polarity_scores, 1, 1)
-        
-        self.verbalizer = verbalizer
+        # verbalization
+        self.__label2id = {"negative": 0, "neutral": 1, "positive": 2}
+        self.__id2label = {v:k for k, v in self.__label2id.items()}
+        self.verbalizer = (lambda pred_id:  self.__id2label[pred_id]) if verbalizer is None else verbalizer
+        # decoding
+        self.amplification_threshold = 0.3
+        self.sentiment_dominance_ratio = 2
         
     def verbalize(self, pred_ids):
-        if self.verbalizer is None:
-            return [VaderSentimentWrapper.ID2LABEL[pred_id] for pred_id in pred_ids]
         return [self.verbalizer(pred_id) for pred_id in pred_ids]
        
-    def decode(self, scores, decoding="argmax", rebalancing_threshold=0.3):
-        scores = np.array([list(score.values())[:-1] for score in scores])
-        if decoding == "argmax":
-            pred_ids = np.argmax(scores, axis=1).tolist()
+    def decode(self, scores, decoding="greedy"):
+        scores = torch.Tensor([list(score.values()) for score in scores])
+        if decoding == "greedy":
+            pred_ids = scores.argmax(dim=-1).tolist()
             return pred_ids
-        elif decoding == "rebalanced":
-            pos_id = VaderSentimentWrapper.LABEL2ID["positive"]
-            neu_id = VaderSentimentWrapper.LABEL2ID["neutral"]
-            neg_id = VaderSentimentWrapper.LABEL2ID["negative"]
-            mask = (scores[:, pos_id] + scores[:, neg_id] >= rebalancing_threshold).flatten()
-            scores[mask, neu_id] = 0
-            pred_ids = np.argmax(scores, axis=1).flatten().tolist()
+        elif decoding == "amplified":
+            positive_scores = scores[:, self.__label2id["positive"]].flatten()
+            negative_scores = scores[:, self.__label2id["negative"]].flatten()
+            # which scores must be amplified?
+            amplification_mask = (positive_scores + negative_scores >= self.amplification_threshold)
+            # do those to be amplified exhibit a setiment dominance?
+            sentiment_dominance_mask = torch.logical_or(
+                positive_scores > self.sentiment_dominance_ratio * negative_scores,
+                negative_scores > self.sentiment_dominance_ratio * positive_scores
+            )
+            mask = torch.logical_and(amplification_mask, sentiment_dominance_mask)
+            scores[mask, self.__label2id["neutral"]] = -1
+            pred_ids = scores.argmax(dim=-1).tolist()
             return pred_ids
+        else:
+            raise ValueError(f"Decoding method '{decoding}' not supported")
     
     def compute_scores(self, texts):
         scores = self.score_func(np.array(texts)).tolist()
-        return scores
+        
+        clean_scores = []
+        for score in scores:
+            del score["compound"]
+            clean_scores.append(score)
+                  
+        return clean_scores
             
-    def __call__(self, texts, decoding="argmax"):
+    def __call__(self, texts, decoding="greedy"):
         scores = self.compute_scores(texts)
         pred_ids = self.decode(scores, decoding=decoding)
         preds = self.verbalize(pred_ids)
