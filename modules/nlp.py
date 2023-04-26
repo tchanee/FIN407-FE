@@ -26,11 +26,11 @@ class BERTWrapperForNER():
          
         self.pipeline = pipeline("ner", model=self.model, tokenizer=self.tokenizer)
     
-    def pipe(self, texts):
+    def extract(self, texts):
         return self.pipeline(texts)
         
     def __call__(self, texts):
-        outputs = self.eval(texts)
+        outputs = self.extract(texts)
         
         all_entities = []
         for output in outputs:
@@ -82,15 +82,21 @@ class BERTWrapperForSA():
     TWEET_BERT_ID = "finiteautomata/bertweet-base-sentiment-analysis"
     DISTILBERT_ID = "textattack/distilbert-base-cased-SST-2"
     
-    def __init__(self, model_id_or_path: str):
+    def __init__(self, model_id_or_path: str, verbalizer=None):
         self.model_name = model_id_or_path.split("/")[-1]
         
         self.tokenizer = AutoTokenizer.from_pretrained(model_id_or_path)
         self.model = AutoModelForSequenceClassification.from_pretrained(model_id_or_path)
         self.model.eval()
+        
+        self.verbalizer = verbalizer
     
     def verbalize(self, pred_ids):
-        return [self.model.config.id2label[pred_id.item()] for pred_id in pred_ids.flatten()]
+        if self.verbalizer is None:
+            # default verbalizer
+            return [self.model.config.id2label[pred_id.item()] for pred_id in pred_ids.flatten()]
+        # custom verbalizer
+        return [self.verbalizer(pred_id.item()) for pred_id in pred_ids.flatten()]
         
     def decode(self, probas, decoding, rebalancing_threshold=0.3):
         if decoding == "argmax":
@@ -117,7 +123,7 @@ class BERTWrapperForSA():
     
     def __call__(self, texts, decoding="argmax"):
         with torch.no_grad():
-            probas = self.eval(texts)
+            probas = self.predict(texts)
             pred_ids = self.decode(probas, decoding)
             preds = self.verbalize(pred_ids)
             return preds
@@ -138,16 +144,18 @@ class VaderSentimentWrapper():
     LABEL2ID = {"negative": 0, "neutral": 1, "positive": 2}
     ID2LABEL = {v:k for k, v in LABEL2ID.items()}
     
-    def __init__(self):
+    def __init__(self, verbalizer=None):
         self.model = SentimentIntensityAnalyzer()
         self.score_func = np.frompyfunc(self.model.polarity_scores, 1, 1)
         
-    @staticmethod
-    def verbalize(pred_ids):
-        return [VaderSentimentWrapper.ID2LABEL[pred_id] for pred_id in pred_ids]
+        self.verbalizer = verbalizer
+        
+    def verbalize(self, pred_ids):
+        if self.verbalizer is None:
+            return [VaderSentimentWrapper.ID2LABEL[pred_id] for pred_id in pred_ids]
+        return [self.verbalizer(pred_id) for pred_id in pred_ids]
        
-    @staticmethod 
-    def decode(scores, decoding="argmax", rebalancing_threshold=0.3):
+    def decode(self, scores, decoding="argmax", rebalancing_threshold=0.3):
         scores = np.array([list(score.values())[:-1] for score in scores])
         if decoding == "argmax":
             pred_ids = np.argmax(scores, axis=1).tolist()
@@ -166,9 +174,9 @@ class VaderSentimentWrapper():
         return scores
             
     def __call__(self, texts, decoding="argmax"):
-        scores = self.eval(texts)
-        pred_ids = VaderSentimentWrapper.decode(scores, decoding=decoding)
-        preds = VaderSentimentWrapper.verbalize(pred_ids)
+        scores = self.compute_scores(texts)
+        pred_ids = self.decode(scores, decoding=decoding)
+        preds = self.verbalize(pred_ids)
         return preds
             
             
