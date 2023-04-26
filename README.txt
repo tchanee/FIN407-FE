@@ -1,23 +1,27 @@
 # FIN407-FE
 Repository for FIN-407 Financial Econometrics project.
 
+## Approach: do elon musk tweets move the market?
+TODO
+
 ## Tasks
 
-Abiola: ETL (main task)
-Johnny: summary stats (main task) + keyword filtering (side task ?) + ETL (side task)
-Farouk: FinBert, NER-DistilBERT, VaderSentiment (main task)
-Safae: market definition (main task) + stock and crypto data (main task) + summary stats with Johnny (side task)
-
-
-## Approaches & Tools
-
-Approach 1: 
-- clustering the tweets by industies/companies: keyword filtering or Davlan/distilbert-base-multilingual-cased-ner-hrl
-- sentiment analysis: vaderSentiment
-
-Approach 2:
-- clustering the tweets by industies/companies: Davlan/distilbert-base-multilingual-cased-ner-hrl
-- sentiment analysis: ProsusAI/finbert + finiteautomata/bertweet-base-sentiment-analysis
+week 9:
+Farouk:
+    - modify the SA model to output the probabilities
+    - rework distribution balancing to mitigate its shortfalls (case where pos approx equals neg and pos + neg > rebalacing_threshhold)
+    - approach?
+Abiola:
+    - extract the tweets that elon musk replied to in a (separate) file, and augment the current processed dataframe with the original tweet's ID for each reply
+    - approach?
+Johnny:
+    - sentiment analysis exploration: average sentiment across all (replies and tweets), replies separateley and tweets separately
+    - word cloud approach to market definition: which companies/stocks/organizations has elon musk tweeted the most about?
+    - approach?
+Safae:
+    - create a pipeline to extract WRDS data for elon musk companies + crypto currencies
+    - approach?
+everyone: report parts
 
 ## Report Outline
 
