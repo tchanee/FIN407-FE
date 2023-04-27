@@ -5,7 +5,7 @@ Repository for FIN-407 Financial Econometrics project.
 more stars = more potential
 - *** sentiment analysis: rule-based (vader) and DL (finbert)
 - *** bayesian structural time series causal effect study: library CausalImpact (from Google in R, but also available in python) https://cran.r-project.org/web/packages/CausalImpact/vignettes/CausalImpact.html#installing-the-package
-- ** NER tweet frequency causal impact on stocks (needs NER)
+- ** tweet frequency causal impact on stocks (needs NER)
 
 ## Tasks
 
