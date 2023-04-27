@@ -8,6 +8,8 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import torch
 import numpy as np
 
+import torchmetrics
+
 
 #################################################################
 # Named Entity Recognition Models
@@ -91,11 +93,11 @@ class BERTWrapperForSA():
         self.model = AutoModelForSequenceClassification.from_pretrained(model_id_or_path)
         self.model.eval()
         # decoding
-        self.amplification_threshold = 0.3
+        self.amplification_threshold = 0.35
         self.sentiment_dominance_ratio = 2
         self.pos_id = self.model.config.label2id["positive"]
         self.neg_id = self.model.config.label2id["negative"]
-        self.neu_id = self.model.config.label2id["neutral"]
+        self.neu_id = self.model.config.label2id["neutral"] 
         # verbalization
         self.verbalizer = (lambda pred_id: self.model.config.id2label[pred_id]) if verbalizer is None else verbalizer
     
@@ -145,7 +147,7 @@ class BERTWrapperForSA():
     def save_to(self, path):
         self.tokenizer.save_pretrained(path)
         self.model.save_pretrained(path)
-        
+    
     @staticmethod
     def load_from(path):
         return BERTWrapperForSA(path)
@@ -160,7 +162,7 @@ class VaderSentimentWrapper():
         self.__id2label = {v:k for k, v in self.__label2id.items()}
         self.verbalizer = (lambda pred_id:  self.__id2label[pred_id]) if verbalizer is None else verbalizer
         # decoding
-        self.amplification_threshold = 0.3
+        self.amplification_threshold = 0.35
         self.sentiment_dominance_ratio = 2
         
     def verbalize(self, pred_ids):
