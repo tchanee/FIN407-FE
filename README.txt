@@ -16,7 +16,7 @@ Abiola:
 Johnny:
     - sentiment analysis exploration: average sentiment across all (replies and tweets), replies separateley and tweets separately
     - word cloud approach to market definition: which companies/stocks/organizations has elon musk tweeted the most about?
-    - approach?
+    - approach idea: aggregate average sentiments between time t-1 and t, use it to predict returns at time t+1.
 Safae:
     - create a pipeline to extract WRDS data for elon musk companies + crypto currencies
     - approach?
