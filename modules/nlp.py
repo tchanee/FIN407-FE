@@ -81,7 +81,16 @@ class BERTWrapperForNER():
 class BERTWrapperForSA():
     FIN_BERT_ID = "ProsusAI/finbert"
     TWEET_BERT_ID = "finiteautomata/bertweet-base-sentiment-analysis"
-    DISTILBERT_ID = "textattack/distilbert-base-cased-SST-2"
+    BASE_BERT_ID = "DunnBC22/bert-base-uncased-Twitter_Sentiment_Analysis_v2"
+    
+    @staticmethod
+    def __adapt_label(label):
+        if label in ["positive", "POS"]:
+            return "positive"
+        elif label in ["negative", "NEG"]:
+            return "negative"
+        else:
+            return "neutral"
     
     def __init__(self, model_id_or_path: str, verbalizer=None):
         # model
@@ -90,21 +99,19 @@ class BERTWrapperForSA():
         self.model = AutoModelForSequenceClassification.from_pretrained(model_id_or_path)
         self.model.eval()
         # decoding
-        self.amplification_threshold = 0.35
-        self.sentiment_dominance_ratio = 2
-        if model_id_or_path == BERTWrapperForSA.FIN_BERT_ID:
-            self.pos_id = self.model.config.label2id["positive"]
-            self.neg_id = self.model.config.label2id["negative"]
-            self.neu_id = self.model.config.label2id["neutral"] 
-        elif model_id_or_path == BERTWrapperForSA.TWEET_BERT_ID:
+        self.amplification_threshold = 0.4
+        self.sentiment_dominance_ratio = 1.5
+        
+        self.pos_id = self.model.config.label2id.get("positive", None)
+        self.neg_id = self.model.config.label2id.get("negative", None)
+        self.neu_id = self.model.config.label2id.get("neutral", None)
+        if self.pos_id is None or self.neg_id is None or self.neu_id is None:
             self.pos_id = self.model.config.label2id["POS"]
             self.neg_id = self.model.config.label2id["NEG"]
             self.neu_id = self.model.config.label2id["NEU"]
-        else:
-            self.pos_id = self.model.config.label2id["LABEL_1"]
-            self.neg_id = self.model.config.label2id["LABEL_0"]
+        
         # verbalization
-        self.verbalizer = (lambda pred_id: self.model.config.id2label[pred_id]) if verbalizer is None else verbalizer
+        self.verbalizer = (lambda pred_id: BERTWrapperForSA.__adapt_label(self.model.config.id2label[pred_id])) if verbalizer is None else verbalizer
     
     def verbalize(self, pred_ids):
         return [self.verbalizer(pred_id) for pred_id in pred_ids]
@@ -157,6 +164,7 @@ class BERTWrapperForSA():
     def load_from(path):
         return BERTWrapperForSA(path)
   
+
 class VaderSentimentWrapper():
     def __init__(self, verbalizer=None):
         # model
