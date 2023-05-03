@@ -89,13 +89,7 @@ def arg_nearest_after(date: dt.datetime, dates: pd.Series):
     for index in date_diffs.argsort():
         if date_diffs.iloc[index].days >= 0:
             return index
-        
     return None
-    
-def prepare_for_bsts(data: pd.DataFrame, effect_date: dt.datetime):
-    effect_lag = int(arg_nearest_after(effect_date, data.date))
-    data = data.drop(columns=["date"]).astype(float)
-    return data, effect_lag
 
 #############################
 # WRDS loader
