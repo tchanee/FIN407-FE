@@ -92,11 +92,11 @@ class BERTWrapperForSA():
         # decoding
         self.amplification_threshold = 0.35
         self.sentiment_dominance_ratio = 2
-        if model_id_or_path == self.FIN_BERT_ID:
+        if model_id_or_path == BERTWrapperForSA.FIN_BERT_ID:
             self.pos_id = self.model.config.label2id["positive"]
             self.neg_id = self.model.config.label2id["negative"]
             self.neu_id = self.model.config.label2id["neutral"] 
-        elif model_id_or_path == self.TWEET_BERT_ID:
+        elif model_id_or_path == BERTWrapperForSA.TWEET_BERT_ID:
             self.pos_id = self.model.config.label2id["POS"]
             self.neg_id = self.model.config.label2id["NEG"]
             self.neu_id = self.model.config.label2id["NEU"]
