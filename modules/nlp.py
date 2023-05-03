@@ -92,9 +92,14 @@ class BERTWrapperForSA():
         # decoding
         self.amplification_threshold = 0.35
         self.sentiment_dominance_ratio = 2
-        self.pos_id = self.model.config.label2id["positive"]
-        self.neg_id = self.model.config.label2id["negative"]
-        self.neu_id = self.model.config.label2id["neutral"] 
+        if model_id_or_path != self.FIN_BERT_ID:
+            self.pos_id = self.model.config.label2id["POS"]
+            self.neg_id = self.model.config.label2id["NEG"]
+            self.neu_id = self.model.config.label2id["NEU"]
+        else:
+            self.pos_id = self.model.config.label2id["positive"]
+            self.neg_id = self.model.config.label2id["negative"]
+            self.neu_id = self.model.config.label2id["neutral"] 
         # verbalization
         self.verbalizer = (lambda pred_id: self.model.config.id2label[pred_id]) if verbalizer is None else verbalizer
     
