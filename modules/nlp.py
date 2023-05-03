@@ -8,9 +8,6 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import torch
 import numpy as np
 
-import torchmetrics
-
-
 #################################################################
 # Named Entity Recognition Models
 #################################################################
@@ -152,7 +149,7 @@ class BERTWrapperForSA():
     def load_from(path):
         return BERTWrapperForSA(path)
   
-class VaderSentimentWrapper():    
+class VaderSentimentWrapper():
     def __init__(self, verbalizer=None):
         # model
         self.model = SentimentIntensityAnalyzer()
