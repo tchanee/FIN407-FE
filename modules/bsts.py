@@ -48,4 +48,4 @@ class BSTSForCausalInferenceWrapper():
         """
         Plot the analysis.
         """
-        return self.ci.plot()
+        self.ci.plot()
