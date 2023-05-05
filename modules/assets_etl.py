@@ -1,9 +1,8 @@
 import wrds
 
-import datetime as dt
-
 import pandas as pd
 import numpy as np
+import datetime as dt
 
 from traceback import print_exc
 from typing import Dict
@@ -12,63 +11,70 @@ from typing import Dict
 # Asset Dataframes Processing Functions
 ###########################################
 
-def preprocess_tsla(tsla_df: pd.DataFrame =None, read_from: str =None):
-    assert tsla_df is not None or read_from is not None, "Either tsla_df or read_from must be provided."
-    assert tsla_df is None or  read_from is None, "Only one of tsla_df or read_from must be provided."
+def preproc_tsla_for_bsts(tsla_df: pd.DataFrame):
+    """Preprocesses the TSLA dataframe for the BSTS analysis?
     
-    # read the dataframe from the file if provided
-    if read_from is not None:
-        tsla_df = pd.read_csv(read_from, index_col=0)
+    Args:
+        tsla_df (pd.DataFrame, optional): the dataframe to preprocess.
     
+    Returns:
+        pd.DataFrame: the preprocessed dataframe.
+    """    
     tsla_df = tsla_df.dropna(axis=0, subset=["ret"]).reset_index(drop=True)
-    tsla_df = tsla_df.convert_dtypes()
     tsla_df["date"] = pd.to_datetime(tsla_df["date"], format="%Y-%m-%d")
+    tsla_df = tsla_df.drop(columns=["Unnamed: 0"])
+    tsla_df = tsla_df[["date", "ret"]]
+    
+    # interpolate missing values
+    min_date = tsla_df.date.min()
+    max_date = tsla_df.date.max()
+    tsla_df = tsla_df.set_index("date")
+    date_range = pd.date_range(min_date, max_date, freq="D")
+    tsla_df = tsla_df.reindex(date_range, fill_value=np.nan)
+    tsla_df["ret"] = tsla_df.ret.interpolate(method="linear")
+    tsla_df = tsla_df.reset_index(names=["date"])
+    
     return tsla_df
 
-def preprocess_rf(rf_df: pd.DataFrame =None, read_from: str =None):
-    assert rf_df is not None or read_from is not None, "Either rf_df or read_from must be provided."
-    assert rf_df is None or  read_from is None, "Only one of rf_df or read_from must be provided."
-    
-    # read the dataframe from the file if provided
-    if read_from is not None:
-        rf_df = pd.read_csv(read_from, index_col=0)
-    
-    rf_df = rf_df.convert_dtypes()
-    
-    # from monthly values to daily values, where the month's values are duplicated into the days of the month
-    rf_df["date"] = rf_df["date"].apply(lambda date: pd.to_datetime(date, format="%Y-%m-%d").replace(day=1))
-    rf_df["dummy"] = "rf"
-    rf_df = rf_df.pivot(index="date", columns="dummy", values="rf")
-    
-    start_date = rf_df.index.min() - pd.DateOffset(day=1)
-    end_date = rf_df.index.max() + pd.DateOffset(day=31)
-    dates = pd.date_range(start_date, end_date, freq='D', name="date")
-    rf_df = rf_df.reindex(dates, method="ffill")
-    rf_df = rf_df.reset_index()
-    rf_df.columns.rename("", inplace=True)
-    
-    return rf_df
+def preproc_ff3_for_bsts(ff_df: pd.DataFrame, after: str = "2010-01-01"):
+    """Preprocesses the Fama-French 3-factor dataframe for the BSTS analysis.
 
-def preprocess_mkt(mkt_df: pd.DataFrame =None, read_from: str =None):
-    assert mkt_df is not None or read_from is not None, "Either mkt_df or read_from must be provided."
-    assert mkt_df is None or  read_from is None, "Only one of mkt_df or read_from must be provided."
+    Args:
+        ff_df (pd.DataFrame): the dataframe to preprocess.
     
-    # read the dataframe from the file if provided
-    if read_from is not None:
-        mkt_df = pd.read_csv(read_from, index_col=0)
+    Returns:
+        pd.DataFrame: the preprocessed dataframe.
+    """
+    ff_df = ff_df.rename(columns={"Mkt-RF": "m", "SMB": "smb", "HML": "hml", "RF": "rf"})
+    ff_df["date"] = pd.to_datetime(ff_df["Unnamed: 0"].astype(str), format="%Y%m%d")
+    ff_df = ff_df.drop(columns=["Unnamed: 0"])
     
-    mkt_df = mkt_df.convert_dtypes()
-    mkt_df["date"] = pd.to_datetime(mkt_df["date"], format="%Y-%m-%d")
+    for col in ff_df.columns[:-1]:
+        ff_df[col] = ff_df[col] * 1e-2
     
-    return mkt_df
-
-def preprocess_btc(btc_df: pd.DataFrame =None, read_from: str =None):
-    assert btc_df is not None or read_from is not None, "Either btc_df or read_from must be provided."
-    assert btc_df is None or  read_from is None, "Only one of btc_df or read_from must be provided."
+    # select only dates after
+    ff_df = ff_df.query(f"date >= '{after}'")
     
-    # read the dataframe from the file if provided
-    if read_from is not None:
-        btc_df = pd.read_csv(read_from)
+    # inteprolate missing values
+    min_date = ff_df.date.min()
+    max_date = ff_df.date.max()
+    ff_df = ff_df.set_index("date")
+    date_range = pd.date_range(min_date, max_date, freq="D")
+    ff_df = ff_df.reindex(date_range, fill_value=np.nan)
+    ff_df = ff_df.interpolate(method="linear")
+    ff_df = ff_df.reset_index(names=["date"])
+    
+    return ff_df
+       
+def preproc_btc(btc_df: pd.DataFrame):
+    """Preprocesses the BTC dataframe for the BSTS analysis.
+    
+    Args:
+        btc_df (pd.DataFrame, optional): the dataframe to preprocess.
+    
+    Returns:
+        pd.DataFrame: the preprocessed dataframe.
+    """
         
     btc_df = btc_df.convert_dtypes()
         
@@ -79,18 +85,16 @@ def preprocess_btc(btc_df: pd.DataFrame =None, read_from: str =None):
     
     return btc_df
 
-def merge_data(stock_df: pd.DataFrame, rf_df: pd.DataFrame, mkt_df: pd.DataFrame):
-    stock_excess_ret = pd.DataFrame({"date": stock_df.date, "xsret": stock_df.ret - rf_df.rf})
-    mkt_excess_ret   = pd.DataFrame({"date": stock_df.date, "mkt_xsret": mkt_df.mkt_ret - rf_df.rf})
-    return pd.merge(stock_excess_ret, mkt_excess_ret, on="date", how="left")
+###########################################
+# Asset Dataframes Transformation Functions
+###########################################
 
-def arg_nearest_after(date: dt.datetime, dates: pd.Series):
-    date_diffs = dates - date
-    for index in date_diffs.argsort():
-        if date_diffs.iloc[index].days >= 0:
-            return index
-    return None
-
+def prepare_for_bsts(stock_df: pd.DataFrame, ff_df: pd.DataFrame, start_date: dt.datetime, end_date: dt.datetime):
+    stock_df = stock_df.query("date >= @start_date and date <= @end_date")
+    ff_df = ff_df.query("date >= @start_date and date <= @end_date")
+    stock_df["retx"] = stock_df.ret.values - ff_df.rf.values
+    return stock_df[["retx", "date"]].merge(ff_df, on="date", how="inner")
+    
 #############################
 # WRDS loader
 #############################
@@ -140,27 +144,6 @@ class WRDSLoader():
             
         return None
     
-    def get_table(self, table: str, library: str ="crsp", close_conn: bool = True):
-        """Loads a WRDS table.
-
-        Args:
-            table (str): the table to be loaded.
-            close_conn (bool, optional): Whether to close the connection after loading the table. Defaults to True.
-            library (str): the library of the table to be loaded. Defaults to "crsp".
-
-        Returns:
-            _type_: _description_
-        """
-        try:
-            table = self.conn.get_table(library=library, table=table)
-            if close_conn:
-                self.close()
-            return table
-        except Exception as e:
-            self.close()
-            print_exc()
-        return None
-    
     def download_stock_data(self, ticker2permno: Dict[str, int], from_: str, to: str, save_to: str =None, close_conn: bool =True):
         """Loads stock data from CRSP.
         
@@ -191,89 +174,3 @@ class WRDSLoader():
                 frame.to_csv(save_to+f"{ticker}_{from_.split('-')[0]}_{to.split('-')[0]}.csv")
         
         return frames
-    
-    def download_rf_data(self, from_: str, to: str, save_to: str =None, close_conn: bool = True):
-        """Loads risk-free rate data from CRSP.
-        
-        Args:
-            from_ (str): start date of the data to be loaded.
-            to (str): end date of the data to be loaded.
-            save_to (str): path to save the data to. Default to None.
-            close_conn (bool, optional): Whether to close the connection after executing the query. Defaults to True.
-        
-        Returns:
-            pandas.DataFrame: the risk-free rate data for the given dates.
-        """
-        # https://www.crsp.org/products/documentation/crsp-risk-free-rates-file
-        query = f"""
-            select  mcaldt, tmytm 
-            from crsp.tfz_mth_rf            
-            where kytreasnox = 2000001 and mcaldt >= '{from_}'and mcaldt <= '{to}'
-        """
-        frame = self.exec(query, close_conn)     
-        frame["tmytm"] = np.exp(frame["tmytm"]/12 /100) - 1
-        frame = frame.rename(columns={"mcaldt":"date", "tmytm":"rf"})
-        
-        # saving the frames to csv files
-        if save_to is not None:
-            frame.to_csv(save_to+f"rf_{from_.split('-')[0]}_{to.split('-')[0]}.csv")
-
-        return frame
-    
-    def download_market_pf_data(self, from_: str, to: str, save_to: str=None, close_conn: bool=True):
-        """Returns the value-weighted market return from CRSP.
-
-        Args:
-            from_ (str): start date of the data to be loaded.
-            to (str): end date of the data to be loaded.
-            save_to (str, optional): path to save the data to. Defaults to None.
-            close_conn (bool, optional): Whether to close the connection after executing the query. Defaults to True.
-
-        Returns:
-            pandas.DataFrame: 
-        """
-        query = f"""
-            select  date,vwretd from crsp.dsi 
-            where date>='{from_}' and date<='{to}'
-        """
-        frame = self.exec(query, close_conn)
-        frame = frame.rename(columns={'vwretd':'mkt_ret'})
-        
-        # save the frame to csv file
-        if save_to is not None:
-            frame.to_csv(save_to+f"market_{from_.split('-')[0]}_{to.split('-')[0]}.csv")
-        
-        return frame
-    
-    def download_sp500_data(self, from_: str, to: str, save_to: str=None, close_conn: bool =True):
-        """_summary_
-
-        Args:
-            from_ (str): _description_
-            to (str): _description_
-            save_to (str, optional): _description_. Defaults to None.
-            close_conn (bool, optional): _description_. Defaults to True.
-        """
-        query = f"""
-            select a.permno, a.date, a.ret, a.shrout, a.prc, b.siccd 
-            from crsp.dsf as a left join crsp.msenames as b 
-                on a.permno=b.permno and b.namedt<=a.date and a.date<=b.nameendt
-            where a.date between '{from_}' and '{to}'
-        """
-        frame = self.exec(query, close_conn=False) # close_conn=False because we will use the connection again
-        frame = frame.convert_dtypes()
-        frame["date"] = pd.to_datetime(frame["date"], format="%Y-%m-%d")
-        
-        # Restrict to SP500 
-        sp500_stocks = self.get_table(table='msp500list', close_conn=close_conn) # connection reused here
-        
-        frame = pd.merge(sp500_stocks, frame, on=['permno'], how='left')
-        frame['ending'] = frame['ending'].fillna(frame.date.max())
-        frame = frame[(frame.date >= frame.start) & (frame.date <= frame.ending)]
-        
-        # save the frame to csv file
-        if save_to is not None:
-            frame.to_csv(save_to+"SP500.csv")
-        
-        return frame
-    

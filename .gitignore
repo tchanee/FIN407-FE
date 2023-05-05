@@ -7,6 +7,7 @@
 # data folders
 Data/
 data/
+others/
 
 # models
 models/*
