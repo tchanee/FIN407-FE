@@ -11,6 +11,34 @@ from typing import Dict
 # Asset Dataframes Processing Functions
 ###########################################
 
+def linear_interpolation(df: pd.DataFrame, cols: list):
+    """Interpolates missing values in a dataframe using linear interpolation.
+
+    Args:
+        df (pd.DataFrame): the dataframe.
+        cols (List, optional): the columns to interpolate.
+
+    Returns:
+        pandas.DataFrame: the dataframe with the interpolated columns.
+    """
+    # prepare for interpolation
+    min_date = df.date.min()
+    max_date = df.date.max()
+    df = df.set_index("date")
+    date_range = pd.date_range(min_date, max_date, freq="D")
+    df = df.reindex(date_range, fill_value=np.nan)
+    
+    # interpolate missing values
+    if cols is None:
+        df = df.interpolate(method="linear")
+    else:
+        df[cols] = df[cols].interpolate(method="linear")
+    
+    # reset the index
+    df = df.reset_index(names=["date"])
+    
+    return df
+
 def preproc_tsla_for_bsts(tsla_df: pd.DataFrame):
     """Preprocesses the TSLA dataframe for the BSTS analysis?
     
@@ -26,13 +54,7 @@ def preproc_tsla_for_bsts(tsla_df: pd.DataFrame):
     tsla_df = tsla_df[["date", "ret"]]
     
     # interpolate missing values
-    min_date = tsla_df.date.min()
-    max_date = tsla_df.date.max()
-    tsla_df = tsla_df.set_index("date")
-    date_range = pd.date_range(min_date, max_date, freq="D")
-    tsla_df = tsla_df.reindex(date_range, fill_value=np.nan)
-    tsla_df["ret"] = tsla_df.ret.interpolate(method="linear")
-    tsla_df = tsla_df.reset_index(names=["date"])
+    tsla_df = linear_interpolation(tsla_df, cols=["ret"])
     
     return tsla_df
 
@@ -56,17 +78,11 @@ def preproc_ff3_for_bsts(ff_df: pd.DataFrame, after: str = "2010-01-01"):
     ff_df = ff_df.query(f"date >= '{after}'")
     
     # inteprolate missing values
-    min_date = ff_df.date.min()
-    max_date = ff_df.date.max()
-    ff_df = ff_df.set_index("date")
-    date_range = pd.date_range(min_date, max_date, freq="D")
-    ff_df = ff_df.reindex(date_range, fill_value=np.nan)
-    ff_df = ff_df.interpolate(method="linear")
-    ff_df = ff_df.reset_index(names=["date"])
+    ff_df = linear_interpolation(ff_df, cols=["m", "smb", "hml", "rf"])
     
     return ff_df
        
-def preproc_btc(btc_df: pd.DataFrame):
+def preproc_btc_for_bsts(btc_df: pd.DataFrame):
     """Preprocesses the BTC dataframe for the BSTS analysis.
     
     Args:
@@ -81,7 +97,9 @@ def preproc_btc(btc_df: pd.DataFrame):
     btc_df = btc_df.drop(columns=["Open", "Volume", "Close", "Adj Close"])
     btc_df = btc_df.rename(columns={"High": "hiprc", "Low": "loprc", "Date": "date"})
     btc_df["midprc"] = (btc_df.hiprc + btc_df.loprc) / 2
+    btc_df["ret"] = btc_df.midprc.pct_change()
     btc_df["date"] = pd.to_datetime(btc_df["date"], format="%Y-%m-%d")
+    btc_df = btc_df.dropna(subset=["ret"])
     
     return btc_df
 
@@ -89,11 +107,14 @@ def preproc_btc(btc_df: pd.DataFrame):
 # Asset Dataframes Transformation Functions
 ###########################################
 
-def prepare_for_bsts(stock_df: pd.DataFrame, ff_df: pd.DataFrame, start_date: dt.datetime, end_date: dt.datetime):
-    stock_df = stock_df.query("date >= @start_date and date <= @end_date")
+def prepare_for_bsts(asset_df: pd.DataFrame, ff_df: pd.DataFrame):
+    start_date = max(ff_df.date.min(), asset_df.date.min())
+    end_date = min(ff_df.date.max(), asset_df.date.max())
+    
+    asset_df = asset_df.query("date >= @start_date and date <= @end_date")
     ff_df = ff_df.query("date >= @start_date and date <= @end_date")
-    stock_df["retx"] = stock_df.ret.values - ff_df.rf.values
-    return stock_df[["retx", "date"]].merge(ff_df, on="date", how="inner")
+    asset_df["retx"] = asset_df.ret.values - ff_df.rf.values
+    return asset_df[["retx", "date"]].merge(ff_df, on="date", how="inner")
     
 #############################
 # WRDS loader

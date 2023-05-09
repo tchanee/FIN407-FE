@@ -1,0 +1,1 @@
+This work was copied from https://github.com/jamalsenouci/causalimpact and improved.

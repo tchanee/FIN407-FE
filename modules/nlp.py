@@ -119,18 +119,6 @@ class BERTWrapperForSA():
     def decode(self, probas, decoding="greedy"):
         if decoding == "greedy":
             pred_ids = probas.argmax(dim=-1).tolist()
-            return pred_ids 
-        elif decoding == "amplified":
-            probas_positive = probas[:, self.pos_id].flatten() 
-            probas_negative = probas[:, self.neg_id].flatten()
-            amplification_mask = probas_positive + probas_negative >= self.amplification_threshold
-            sentiment_dominance_mask = torch.logical_or(
-                probas_positive > self.sentiment_dominance_ratio * probas_negative,
-                probas_negative > self.sentiment_dominance_ratio * probas_positive
-            )
-            mask = torch.logical_and(amplification_mask, sentiment_dominance_mask)
-            probas[mask, self.neu_id] = -1
-            pred_ids = probas.argmax(dim=-1).tolist()
             return pred_ids
         else:
             raise ValueError(f"Decoding method '{decoding}' not supported")
@@ -184,20 +172,6 @@ class VaderSentimentWrapper():
     def decode(self, scores, decoding="greedy"):
         scores = torch.Tensor([list(score.values()) for score in scores])
         if decoding == "greedy":
-            pred_ids = scores.argmax(dim=-1).tolist()
-            return pred_ids
-        elif decoding == "amplified":
-            positive_scores = scores[:, self.__label2id["positive"]].flatten()
-            negative_scores = scores[:, self.__label2id["negative"]].flatten()
-            # which scores must be amplified?
-            amplification_mask = (positive_scores + negative_scores >= self.amplification_threshold)
-            # do those to be amplified exhibit a setiment dominance?
-            sentiment_dominance_mask = torch.logical_or(
-                positive_scores > self.sentiment_dominance_ratio * negative_scores,
-                negative_scores > self.sentiment_dominance_ratio * positive_scores
-            )
-            mask = torch.logical_and(amplification_mask, sentiment_dominance_mask)
-            scores[mask, self.__label2id["neutral"]] = -1
             pred_ids = scores.argmax(dim=-1).tolist()
             return pred_ids
         else:

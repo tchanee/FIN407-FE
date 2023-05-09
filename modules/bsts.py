@@ -1,4 +1,4 @@
-from causalimpact.analysis import CausalImpact
+from causal_impact.analysis import CausalImpact
 import pandas as pd
 
 class BSTSForCausalInferenceWrapper():
@@ -31,7 +31,7 @@ class BSTSForCausalInferenceWrapper():
         pre_period  = [start, at_lag - 1]
         post_period = [at_lag, end]
         
-        self.ci = CausalImpact(self.data.iloc[start:end+1], pre_period, post_period)
+        self.ci = CausalImpact(self.data.iloc[start:end+1], pre_period, post_period)      
         self.ci.run()
         return self
 
@@ -44,8 +44,8 @@ class BSTSForCausalInferenceWrapper():
         """
         print(self.ci.summary() if not(textual) else self.ci.summary(output="report"))
     
-    def plot(self):
+    def plot(self, figsize=(10, 8), fname=None):
         """
         Plot the analysis.
         """
-        self.ci.plot()
+        self.ci.plot(figsize=figsize, fname=fname)
