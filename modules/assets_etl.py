@@ -11,7 +11,6 @@ from typing import Dict
 # Asset Dataframes Processing Functions
 ###########################################
 
-
 def linear_interpolation(df: pd.DataFrame, cols: list):
     """Interpolates missing values in a dataframe using linear interpolation.
 
@@ -40,8 +39,7 @@ def linear_interpolation(df: pd.DataFrame, cols: list):
 
     return df
 
-
-def preproc_tsla_for_bsts(tsla_df: pd.DataFrame):
+def bsts_prepare_tsla(tsla_df: pd.DataFrame):
     """Preprocesses the TSLA dataframe for the BSTS analysis?
 
     Args:
@@ -60,35 +58,50 @@ def preproc_tsla_for_bsts(tsla_df: pd.DataFrame):
 
     return tsla_df
 
-
-def preproc_ff3_for_bsts(ff_df: pd.DataFrame, after: str = "2010-01-01"):
-    """Preprocesses the Fama-French 3-factor dataframe for the BSTS analysis.
+def bsts_prepare_f3(factors_df: pd.DataFrame):
+    """Preprocesses the Carhart 4-factor dataframe for the BSTS analysis.
 
     Args:
-        ff_df (pd.DataFrame): the dataframe to preprocess.
+        factors_df (pd.DataFrame): the dataframe to preprocess.
 
     Returns:
         pd.DataFrame: the preprocessed dataframe.
     """
-    ff_df = ff_df.rename(
+    factors_df = factors_df.rename(
         columns={"Mkt-RF": "m", "SMB": "smb", "HML": "hml", "RF": "rf"})
-    ff_df["date"] = pd.to_datetime(
-        ff_df["Unnamed: 0"].astype(str), format="%Y%m%d")
-    ff_df = ff_df.drop(columns=["Unnamed: 0"])
+    factors_df["date"] = pd.to_datetime(
+        factors_df["Unnamed: 0"].astype(str), format="%Y%m%d")
+    factors_df = factors_df.drop(columns=["Unnamed: 0"])
 
-    for col in ff_df.columns[:-1]:
-        ff_df[col] = ff_df[col] * 1e-2
-
-    # select only dates after
-    ff_df = ff_df.query(f"date >= '{after}'")
+    for col in factors_df.columns[:-1]:
+        factors_df[col] = factors_df[col] * 1e-2
 
     # inteprolate missing values
-    ff_df = linear_interpolation(ff_df, cols=["m", "smb", "hml", "rf"])
+    factors_df = linear_interpolation(factors_df, cols=["m", "smb", "hml", "rf"])
 
-    return ff_df
+    return factors_df
 
+def bsts_prepare_f6(factors_df: pd.DataFrame):
+    """Preprocesses the Carhart 4-factor dataframe for the BSTS analysis.
 
-def preproc_btc_for_bsts(btc_df: pd.DataFrame):
+    Args:
+        factors_df (pd.DataFrame): the dataframe to preprocess.
+
+    Returns:
+        pd.DataFrame: the preprocessed dataframe.
+    """
+    factor_cols = ["m", "smb", "hml", "rf", "umd", "rmw", "cma"]
+    
+    factors_df = factors_df.rename(columns={"mktrf": "m"})
+    factors_df["date"] = pd.to_datetime(factors_df.date.astype(str), format="%Y-%m-%d")
+
+    # inteprolate missing values
+    factors_df = linear_interpolation(factors_df, cols=factor_cols)
+    factors_df = factors_df.dropna(subset=factor_cols)
+
+    return factors_df
+
+def bsts_prepare_btc(btc_df: pd.DataFrame):
     """Preprocesses the BTC dataframe for the BSTS analysis.
 
     Args:
@@ -114,15 +127,17 @@ def preproc_btc_for_bsts(btc_df: pd.DataFrame):
 # Asset Dataframes Transformation Functions
 ###########################################
 
-
-def prepare_for_bsts(asset_df: pd.DataFrame, ff_df: pd.DataFrame):
-    start_date = max(ff_df.date.min(), asset_df.date.min())
-    end_date = min(ff_df.date.max(), asset_df.date.max())
-
+def bsts_prepare_data(asset_df: pd.DataFrame, factors_df: pd.DataFrame):
+    start_date = max(factors_df.date.min(), asset_df.date.min())
+    end_date = min(factors_df.date.max(), asset_df.date.max())
     asset_df = asset_df.query("date >= @start_date and date <= @end_date")
-    ff_df = ff_df.query("date >= @start_date and date <= @end_date")
-    asset_df["retx"] = asset_df.ret.values - ff_df.rf.values
-    return asset_df[["retx", "date"]].merge(ff_df, on="date", how="inner")
+    factors_df = factors_df.query("date >= @start_date and date <= @end_date")
+    
+    asset_df["retx"] = asset_df.ret.values - factors_df.rf.values
+    factors_df = factors_df.drop(columns=["rf"])
+    merged = asset_df[["retx", "date"]].merge(factors_df, on="date", how="inner")
+    
+    return merged
 
 #############################
 # WRDS loader
@@ -199,11 +214,13 @@ class WRDSLoader():
                          permno in ticker2permno.items()}
         frames = {permno2ticker[permno]: group for permno,
                   group in data.groupby("permno")}
-
+        
         # saving the frames to csv files
         if save_to is not None:
             for ticker, frame in frames.items():
+                min_year = frame.date.min().strftime("%Y-%m-%d").split('-')[0]
+                max_year = frame.date.max().strftime("%Y-%m-%d").split('-')[0]
                 frame.to_csv(
-                    save_to+f"{ticker}_{from_.split('-')[0]}_{to.split('-')[0]}.csv")
+                    save_to+f"{ticker}_{min_year}_{max_year}.csv")
 
         return frames
