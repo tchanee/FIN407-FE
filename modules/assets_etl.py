@@ -101,27 +101,27 @@ def bsts_prepare_f6(factors_df: pd.DataFrame):
 
     return factors_df
 
-def bsts_prepare_btc(btc_df: pd.DataFrame):
+def bsts_prepare_crypto(crypto_df: pd.DataFrame):
     """Preprocesses the BTC dataframe for the BSTS analysis.
 
     Args:
-        btc_df (pd.DataFrame, optional): the dataframe to preprocess.
+        crypto_df (pd.DataFrame, optional): the dataframe to preprocess.
 
     Returns:
         pd.DataFrame: the preprocessed dataframe.
     """
 
-    btc_df = btc_df.convert_dtypes()
+    crypto_df = crypto_df.convert_dtypes()
 
-    btc_df = btc_df.drop(columns=["Open", "Volume", "Close", "Adj Close"])
-    btc_df = btc_df.rename(
+    crypto_df = crypto_df.drop(columns=["Open", "Volume", "Close", "Adj Close"])
+    crypto_df = crypto_df.rename(
         columns={"High": "hiprc", "Low": "loprc", "Date": "date"})
-    btc_df["midprc"] = (btc_df.hiprc + btc_df.loprc) / 2
-    btc_df["ret"] = btc_df.midprc.pct_change()
-    btc_df["date"] = pd.to_datetime(btc_df["date"], format="%Y-%m-%d")
-    btc_df = btc_df.dropna(subset=["ret"])
+    crypto_df["midprc"] = (crypto_df.hiprc + crypto_df.loprc) / 2
+    crypto_df["ret"] = crypto_df.midprc.pct_change()
+    crypto_df["date"] = pd.to_datetime(crypto_df["date"], format="%Y-%m-%d")
+    crypto_df = crypto_df.dropna(subset=["ret"])
 
-    return btc_df
+    return crypto_df
 
 ###########################################
 # Asset Dataframes Transformation Functions

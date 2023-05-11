@@ -46,7 +46,7 @@ class BSTSForCausalInferenceWrapper():
         """
         print(self.ci.summary() if not(textual) else self.ci.summary(output="report"))
     
-    def plot(self, figsize=(10, 8), fname=None):
+    def plot(self, figsize=(8, 7), fname=None):
         """
         Plot the analysis.
         """
@@ -74,7 +74,8 @@ def asset_tweet_pair_analysis(excess_rets: pd.DataFrame, tweet: pd.Series,
         if date >= tweet.date.values[0]:
             effect_lag = idx
             break
-    assert effect_lag is not None
+    if effect_lag is None:
+        return None
     
     bsts_model = BSTSForCausalInferenceWrapper(prepared_data)
     bsts_model.fit(effect_lag, pre_effect_lag_window, post_effect_lag_window)
