@@ -1,5 +1,7 @@
 from causal_impact.analysis import CausalImpact
+
 import pandas as pd
+
 
 class BSTSForCausalInferenceWrapper():
     """
@@ -49,3 +51,32 @@ class BSTSForCausalInferenceWrapper():
         Plot the analysis.
         """
         self.ci.plot(figsize=figsize, fname=fname)
+
+
+def asset_tweet_pair_analysis(excess_rets: pd.DataFrame, tweet: pd.Series, 
+                              pre_effect_lag_window: int =14, post_effect_lag_window: int =3):
+    """_summary_
+
+    Args:
+        excess_rets (pd.DataFrame): _description_
+        tweet (pd.Series): _description_
+        pre_effect_lag_window (int, optional): _description_. Defaults to 14.
+        post_effect_lag_window (int, optional): _description_. Defaults to 5.
+
+    Returns:
+        _type_: _description_
+    """
+    
+    prepared_data = excess_rets.drop(columns=["date"]).astype(float)
+    
+    effect_lag = None
+    for idx, date in enumerate(excess_rets.date):
+        if date >= tweet.date.values[0]:
+            effect_lag = idx
+            break
+    assert effect_lag is not None
+    
+    bsts_model = BSTSForCausalInferenceWrapper(prepared_data)
+    bsts_model.fit(effect_lag, pre_effect_lag_window, post_effect_lag_window)
+        
+    return bsts_model

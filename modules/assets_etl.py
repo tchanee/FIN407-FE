@@ -39,7 +39,7 @@ def linear_interpolation(df: pd.DataFrame, cols: list):
 
     return df
 
-def bsts_prepare_tsla(tsla_df: pd.DataFrame):
+def bsts_prepare_stock(tsla_df: pd.DataFrame):
     """Preprocesses the TSLA dataframe for the BSTS analysis?
 
     Args:
