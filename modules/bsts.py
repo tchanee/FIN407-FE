@@ -50,7 +50,7 @@ class BSTSForCausalInferenceWrapper():
         """
         Plot the analysis.
         """
-        self.ci.plot(figsize=figsize, fname=fname)
+        self.ci.plot(figsize=figsize, fname=fname, panels=["original", "pointwise"])
 
 
 def asset_tweet_pair_analysis(excess_rets: pd.DataFrame, tweet: pd.Series, 
