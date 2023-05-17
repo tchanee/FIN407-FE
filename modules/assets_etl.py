@@ -35,7 +35,7 @@ def linear_interpolation(df: pd.DataFrame, cols: list):
         df[cols] = df[cols].interpolate(method="linear")
 
     # reset the index
-    df = df.reset_index(names=["date"])
+    df = df.reset_index()
 
     return df
 

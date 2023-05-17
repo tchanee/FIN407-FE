@@ -1,0 +1,25 @@
+Percentage of significant p-values for each security and sentiment:
+
+For Window Size: 14 days before and 7 days after
+Tesla
+  neutral: 0.1887308533916849
+  negative: 0.18045112781954886
+  positive: 0.20107719928186715
+Twitter
+  neutral: 0.13747954173486088
+  negative: 0.25
+  positive: 0.15862068965517243
+Bitcoin
+  neutral: 0.08035714285714286
+  negative: 0.0
+  positive: 0.21052631578947367
+Doge
+  neutral: 0.06474820143884892
+  negative: 0.08333333333333333
+  positive: 0.12
+Eth
+  neutral: 0.11392405063291139
+  negative: 0.2
+  positive: 0.13793103448275862
+
+
